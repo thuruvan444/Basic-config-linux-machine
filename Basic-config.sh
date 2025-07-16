@@ -149,15 +149,19 @@ else
     exit 1
 fi
 
-# Source .bashrc for the current user
-log_info "Sourcing ~/.bashrc to apply custom prompt immediately..."
+# The internal source command for completeness, but won't affect the parent shell directly
+log_info "Attempting to apply custom prompt within script's context..."
 if source "/home/$USERNAME/.bashrc"; then
-    log_success "Custom prompt applied!"
+    log_success "Custom prompt applied within the script's shell!"
 else
-    log_error "Failed to source ~/.bashrc. You may need to restart your terminal or run 'source ~/.bashrc' manually."
+    log_error "Failed to source ~/.bashrc within script. This is usually okay."
 fi
 
 
 log_success "Setup complete!"
 echo -e "Hostname set to: ${YELLOW}$VM_NAME${RESET}"
-echo -e "Custom prompt will be: ${BLUE}${COURSE_NAME}-${MAGENTA}${VM_NAME}-${YELLOW}${USERNAME}${RESET} ${GREEN}<Current Date/Time>${RESET} \$ "
+echo -e "The custom prompt has been configured to: ${BLUE}${COURSE_NAME}-${MAGENTA}${VM_NAME}-${YELLOW}${USERNAME}${RESET} ${GREEN}<Current Date/Time>${RESET} \$ "
+echo -e "${YELLOW}IMPORTANT:${RESET} To see the new prompt in this current terminal session, you MUST run:"
+echo -e "${YELLOW}  source ~/.bashrc${RESET}"
+echo -e "${YELLOW}Or simply close and reopen your terminal. ${RESET}"
+echo -e "All other system configurations (updates, tools, hostname, network) are already active."
