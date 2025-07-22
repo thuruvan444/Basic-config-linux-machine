@@ -26,10 +26,11 @@ log_error() {
 
 # === Update and Install Essentials ===
 log_info "Updating package list and installing basic tools..."
-if sudo apt update && sudo apt install -y build-essential iputils-ping curl wget git vim nano net-tools; then
-    log_success "Basic tools installed successfully."
+# Added nftables to the install list as it's required for masquerading
+if sudo apt update && sudo apt install -y build-essential iputils-ping curl wget git vim nano net-tools nftables; then
+    log_success "Basic tools and nftables installed successfully."
 else
-    log_error "Failed to install basic tools. Exiting."
+    log_error "Failed to install basic tools or nftables. Exiting."
     exit 1
 fi
 
@@ -139,13 +140,104 @@ else
     # Do not exit, as Netplan apply might still work, just with a warning.
 fi
 
-
 # === Apply Netplan Configuration ===
 echo -e "\n${CYAN}Applying network configuration...${RESET}"
 if sudo netplan apply; then
     log_success "Network configuration applied successfully."
 else
     log_error "Failed to apply network configuration. Check Netplan logs for errors."
+    exit 1
+fi
+
+# === ROUTER CONFIGURATION: Enable IP Forwarding (Step 3 from PDF) ===
+log_info "Enabling IP forwarding for router functionality..."
+SYSCTL_CONF="/etc/sysctl.conf"
+if ! grep -q "^net.ipv4.ip_forward=1" "$SYSCTL_CONF"; then
+    log_info "Backing up sysctl.conf to ${SYSCTL_CONF}.original"
+    sudo cp "$SYSCTL_CONF" "${SYSCTL_CONF}.original"
+
+    log_info "Modifying sysctl.conf to enable IP forwarding..."
+    # Remove '#' and any leading/trailing spaces from the line containing ip_forward
+    sudo sed -i '/^#\s*net.ipv4.ip_forward/s/^#\s*//' "$SYSCTL_CONF"
+    # Ensure the line is exactly 'net.ipv4.ip_forward=1'
+    if ! grep -q "^net.ipv4.ip_forward=1" "$SYSCTL_CONF"; then
+        echo "net.ipv4.ip_forward=1" | sudo tee -a "$SYSCTL_CONF" > /dev/null
+    fi
+    log_success "IP forwarding configured in sysctl.conf."
+else
+    log_info "IP forwarding is already enabled in sysctl.conf."
+fi
+
+log_info "Applying sysctl changes..."
+if sudo sysctl -p; then
+    log_success "IP forwarding enabled successfully."
+else
+    log_error "Failed to enable IP forwarding. Exiting."
+    exit 1
+fi
+
+# === ROUTER CONFIGURATION: Configure nftables for Masquerading (Step 4 from PDF) ===
+log_info "Configuring nftables for masquerading (NAT)..."
+
+read -p "Enter the name of the EXTERNAL (Internet-facing) network interface for masquerading (e.g., enp0s3): " EXTERNAL_INTERFACE
+
+if [[ -z "$EXTERNAL_INTERFACE" ]]; then
+    log_error "External interface name is required for masquerading. Exiting."
+    exit 1
+fi
+
+NFTABLES_RULESET_FILE="/etc/nftables.ruleset"
+
+log_info "Flushing existing nftables ruleset and adding NAT rules..."
+if sudo nft flush ruleset && \
+   sudo nft add table ip nat && \
+   sudo nft add chain ip nat POSTROUTING '{ type nat hook postrouting priority 100; policy accept; }' && \
+   sudo nft add rule ip nat POSTROUTING oifname "$EXTERNAL_INTERFACE" counter masquerade; then
+    log_success "nftables NAT rules added successfully."
+
+    log_info "Saving nftables ruleset to $NFTABLES_RULESET_FILE..."
+    if sudo nft list ruleset > "$NFTABLES_RULESET_FILE"; then
+        log_success "nftables ruleset saved to $NFTABLES_RULESET_FILE."
+        log_info "Current nftables ruleset:"
+        cat "$NFTABLES_RULESET_FILE"
+    else
+        log_error "Failed to save nftables ruleset. Please check permissions or disk space."
+        exit 1
+    fi
+else
+    log_error "Failed to configure nftables. Check nftables logs for errors. Exiting."
+    exit 1
+fi
+
+# === ROUTER CONFIGURATION: Make nftables rules persistent (Step 5 & 6 from PDF) ===
+log_info "Making nftables rules persistent using networkd-dispatcher..."
+NETWORKD_DISPATCHER_DIR="/etc/networkd-dispatcher/routable.d"
+HOOK_FILE="$NETWORKD_DISPATCHER_DIR/50-ifup.hooks"
+
+log_info "Creating directory $NETWORKD_DISPATCHER_DIR if it does not exist..."
+if sudo mkdir -p "$NETWORKD_DISPATCHER_DIR"; then
+    log_success "Directory $NETWORKD_DISPATCHER_DIR ensured."
+else
+    log_error "Failed to create directory $NETWORKD_DISPATCHER_DIR. Exiting."
+    exit 1
+fi
+
+log_info "Creating and setting permissions for $HOOK_FILE..."
+cat << 'EOF_HOOK' | sudo tee "$HOOK_FILE" > /dev/null
+#!/bin/bash
+#
+# This script is executed by networkd-dispatcher when an interface becomes routable.
+# It loads the nftables ruleset to ensure NAT/masquerading is active after network changes.
+
+/usr/sbin/nft --file /etc/nftables.ruleset
+
+# Entire contents added by Thuruvan Thavapalan on $(date +%F)
+EOF_HOOK
+
+if sudo chmod a+x "$HOOK_FILE"; then
+    log_success "Hook file $HOOK_FILE created and made executable."
+else
+    log_error "Failed to make hook file executable. Exiting."
     exit 1
 fi
 
@@ -164,4 +256,6 @@ echo -e "The custom prompt has been configured to: ${BLUE}${COURSE_NAME}-${MAGEN
 echo -e "${YELLOW}IMPORTANT:${RESET} To see the new prompt in this current terminal session, you MUST run:"
 echo -e "${YELLOW}  source ~/.bashrc${RESET}"
 echo -e "${YELLOW}Or simply close and reopen your terminal. ${RESET}"
-echo -e "All other system configurations (updates, tools, hostname, network) are already active."
+echo -e "All other system configurations (updates, tools, hostname, network, and router functionality) are already active."
+
+echo -e "\n${YELLOW}This script was made by Thuruvan Thavapalan with help of AI.${RESET}"
