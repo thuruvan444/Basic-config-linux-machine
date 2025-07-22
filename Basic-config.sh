@@ -25,12 +25,17 @@ log_error() {
 }
 
 # === Update and Install Essentials ===
-log_info "Updating package list and installing basic tools..."
-if sudo apt update && sudo apt install -y build-essential iputils-ping curl wget git vim nano net-tools; then
-    log_success "Basic tools installed successfully."
+read -p "Do you want to update and install basic tools (requires internet)? (y/n): " DO_UPDATE
+if [[ "$DO_UPDATE" =~ ^[Yy]$ ]]; then
+    log_info "Updating package list and installing basic tools..."
+    if sudo apt update && sudo apt install -y build-essential iputils-ping curl wget git vim nano net-tools; then
+        log_success "Basic tools installed successfully."
+    else
+        log_error "Failed to install basic tools. Check your internet connection. Exiting."
+        exit 1
+    fi
 else
-    log_error "Failed to install basic tools. Exiting."
-    exit 1
+    log_info "Skipped package update and installation by user choice."
 fi
 
 # === Prompt for Hostname and Prompt Customization ===
