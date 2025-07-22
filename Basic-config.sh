@@ -315,15 +315,6 @@ else
     exit 1
 fi
 
-# The internal source command for completeness, but won't affect the parent shell directly
-log_info "Attempting to apply custom prompt within script's context..."
-if source "/home/$USERNAME/.bashrc"; then
-    log_success "Custom prompt applied within the script's shell!"
-else
-    log_error "Failed to source ~/.bashrc within script. This is usually okay."
-fi
-
-
 log_success "Setup complete!"
 echo -e "Hostname set to: ${YELLOW}$VM_NAME${RESET}"
 echo -e "The custom prompt has been configured to: ${BLUE}${COURSE_NAME}-${MAGENTA}${VM_NAME}-${YELLOW}${USERNAME}${RESET} ${GREEN}<Current Date/Time>${RESET} \$ "
