@@ -239,6 +239,7 @@ if [[ "$IS_ROUTER" =~ ^[Yy]$ ]]; then
     if [[ "$MAKE_PERSISTENT" =~ ^[Yy]$ ]]; then
         sudo bash -c 'cat > /etc/networkd-dispatcher/routable.d/50-ifup.hooks' << 'EOF'
 #!/bin/bash
+/usr/sbin/nft flush ruleset
 /usr/sbin/nft --file /etc/nftables.ruleset
 EOF
         log_success "Persistence enabled: nftables rules will be reloaded on interface up."
