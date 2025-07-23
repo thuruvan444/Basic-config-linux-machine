@@ -260,4 +260,5 @@ echo -e "The custom prompt has been configured to: ${BLUE}${COURSE_NAME}-${MAGEN
 echo -e "${YELLOW}IMPORTANT:${RESET} To see the new prompt in this current terminal session, you MUST run:"
 echo -e "${YELLOW}  source ~/.bashrc${RESET}"
 echo -e "${YELLOW}Or simply close and reopen your terminal. ${RESET}"
-echo -e "All other system configurations (updates, tools, hostname, network) are already active."#!/bin/bash
+echo -e "All other system configurations (updates, tools, hostname, network) are already active."
+echo -e "${RED}This script has been created by Thuruvan Thavapaln and with the help of AI :-)"
