@@ -191,4 +191,4 @@ if [[ "$CUSTOM_PROMPT_ENABLED" == true ]]; then
     echo -e "${YELLOW}Or simply close and reopen your terminal.${RESET}"
 fi
 echo -e "All other system configurations (updates, tools, hostname, network) are already active."
-echo -e "${RED}This script has been created by Thuruvan Thavapaln and with the help of AI :-)"
+echo -e "${RED}This script has been created by Thuruvan Thavapalan with the help of AI :-)"
