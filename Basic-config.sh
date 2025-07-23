@@ -39,16 +39,16 @@ else
 fi
 
 # === Prompt for Hostname and Prompt Customization ===
-log_info "Prompting for hostname and user details..."
-read -p "Enter Course Name (e.g., SRT411): " COURSE_NAME
-read -p "Enter VM Name (e.g., L1VM): " VM_NAME
+log_info "Prompting for basic system details..."
 read -p "Enter your Username: " USERNAME
 
-# Validate Username (basic check if user exists)
+# Validate Username
 if ! id "$USERNAME" &>/dev/null; then
     log_error "User '$USERNAME' does not exist. Please create the user first or enter an existing one. Exiting."
     exit 1
 fi
+
+read -p "Enter VM Name (e.g., L1VM): " VM_NAME
 
 # === Set Hostname ===
 log_info "Setting hostname to '$VM_NAME'..."
@@ -62,6 +62,8 @@ fi
 # === Optional Terminal Prompt Customization ===
 read -p "Do you want to customize the terminal prompt for the user? (y/n): " DO_PROMPT
 if [[ "$DO_PROMPT" =~ ^[Yy]$ ]]; then
+    read -p "Enter Course Name (e.g., SRT411): " COURSE_NAME
+
     BASHRC_FILE="/home/$USERNAME/.bashrc"
     log_info "Configuring custom terminal prompt for user '$USERNAME'..."
 
@@ -78,6 +80,15 @@ if [[ "$DO_PROMPT" =~ ^[Yy]$ ]]; then
     fi
 
     cat << EOF | sudo tee -a "$BASHRC_FILE"
+
+# Custom prompt
+PS1="${BLUE}${COURSE_NAME}-${MAGENTA}${VM_NAME}-${YELLOW}${USERNAME}${RESET} ${GREEN}\\$(date +%a\\ %b\\ %d\\ -\\ %H:%M:%S)${RESET} \\$ "
+EOF
+    log_success "Custom terminal prompt configured."
+else
+    log_info "Skipped terminal prompt customization by user choice."
+fi
+
 
 # Custom prompt
 PS1="${BLUE}${COURSE_NAME}-${MAGENTA}${VM_NAME}-${YELLOW}${USERNAME}${RESET} ${GREEN}\$(date +%a\ %b\ %d\ -\ %H:%M:%S)${RESET} \$ "
