@@ -28,7 +28,7 @@ log_error() {
 read -p "Do you want to update and install basic tools (requires internet)? (y/n): " DO_UPDATE
 if [[ "$DO_UPDATE" =~ ^[Yy]$ ]]; then
     log_info "Updating package list and installing basic tools..."
-    if sudo apt update && sudo apt install -y build-essential iputils-ping curl wget git vim nano net-tools; then
+    if sudo apt update && sudo apt install -y build-essential iputils-ping curl wget git vim nano net-tools cockpit; then
         log_success "Basic tools installed successfully."
     else
         log_error "Failed to install basic tools. Check your internet connection. Exiting."
