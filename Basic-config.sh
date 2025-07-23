@@ -59,154 +59,105 @@ else
     exit 1
 fi
 
-# === Configure Custom Terminal Prompt ===
-BASHRC_FILE="/home/$USERNAME/.bashrc"
-log_info "Configuring custom terminal prompt for user '$USERNAME'..."
+# === Optional Terminal Prompt Customization ===
+read -p "Do you want to customize the terminal prompt for the user? (y/n): " DO_PROMPT
+if [[ "$DO_PROMPT" =~ ^[Yy]$ ]]; then
+    BASHRC_FILE="/home/$USERNAME/.bashrc"
+    log_info "Configuring custom terminal prompt for user '$USERNAME'..."
 
-if [ ! -f "$BASHRC_FILE" ]; then
-    log_error ".bashrc not found for user $USERNAME. Creating one."
-    touch "$BASHRC_FILE"
-    chown "$USERNAME":"$USERNAME" "$BASHRC_FILE"
-fi
+    if [ ! -f "$BASHRC_FILE" ]; then
+        log_error ".bashrc not found for user $USERNAME. Creating one."
+        touch "$BASHRC_FILE"
+        chown "$USERNAME":"$USERNAME" "$BASHRC_FILE"
+    fi
 
-# Backup existing .bashrc if PS1 is already custom
-if grep -q "Custom prompt" "$BASHRC_FILE"; then
-    log_info "Existing custom prompt found. Backing up .bashrc to ${BASHRC_FILE}.bak"
-    cp "$BASHRC_FILE" "${BASHRC_FILE}.bak"
-    # Remove existing custom prompt to avoid duplicates
-    sudo sed -i '/# Custom prompt/,/^PS1=.*$/d' "$BASHRC_FILE"
-fi
+    if grep -q "Custom prompt" "$BASHRC_FILE"; then
+        log_info "Existing custom prompt found. Backing up .bashrc to ${BASHRC_FILE}.bak"
+        cp "$BASHRC_FILE" "${BASHRC_FILE}.bak"
+        sudo sed -i '/# Custom prompt/,/^PS1=.*$/d' "$BASHRC_FILE"
+    fi
 
-# Append custom PS1 to .bashrc
-cat << EOF | sudo tee -a "$BASHRC_FILE"
+    cat << EOF | sudo tee -a "$BASHRC_FILE"
 
 # Custom prompt
 PS1="${BLUE}${COURSE_NAME}-${MAGENTA}${VM_NAME}-${YELLOW}${USERNAME}${RESET} ${GREEN}\$(date +%a\ %b\ %d\ -\ %H:%M:%S)${RESET} \$ "
 EOF
-log_success "Custom terminal prompt configured."
-
-# === Prompt for number of adapters ===
-log_info "Configuring network interfaces."
-read -p "Enter the number of network adapters to configure: " NUM_ADAPTERS
-
-if ! [[ "$NUM_ADAPTERS" =~ ^[0-9]+$ ]] || [ "$NUM_ADAPTERS" -eq 0 ]; then
-    log_error "Invalid number of adapters. Must be a positive integer. Exiting."
-    exit 1
+    log_success "Custom terminal prompt configured."
+else
+    log_info "Skipped terminal prompt customization by user choice."
 fi
 
-# === Build Netplan YAML ===
-NETPLAN_FILE="/etc/netplan/01-netcfg.yaml"
-log_info "Creating Netplan configuration file: $NETPLAN_FILE"
+# === Optional Network Interface Configuration ===
+read -p "Do you want to configure network interfaces? (y/n): " DO_NETPLAN
+if [[ "$DO_NETPLAN" =~ ^[Yy]$ ]]; then
+    log_info "Configuring network interfaces."
+    read -p "Enter the number of network adapters to configure: " NUM_ADAPTERS
 
-# Start fresh with the Netplan file
-echo "network:" | sudo tee $NETPLAN_FILE > /dev/null
-echo "  version: 2" | sudo tee -a $NETPLAN_FILE > /dev/null
-echo "  ethernets:" | sudo tee -a $NETPLAN_FILE > /dev/null
-
-# === Loop through each adapter ===
-for (( i=1; i<=NUM_ADAPTERS; i++ ))
-do
-    echo -e "\n${YELLOW}--- Configuring adapter #$i ---${RESET}"
-    read -p "  Adapter name (e.g., ens33): " ADAPTER
-    read -p "  Static IP Address (e.g., 192.168.1.10): " IPADDR
-    read -p "  Subnet Mask (e.g., 24): " NETMASK
-
-    # Optional: Gateway, DNS, and Custom Routes
-    read -p "  Default Gateway (optional, press Enter to skip): " GATEWAY
-    read -p "  DNS Servers (space separated, optional, press Enter to skip): " DNS
-
-    # Custom routes input (can be multiple routes separated by commas)
-    read -p "  Static Routes (format: <destination_cidr>:<via>, separate multiple with commas, e.g., 192.168.5.0/24:192.168.2.1): " ROUTES
-
-    # Basic validation for IP and Netmask
-    if [[ -z "$ADAPTER" || -z "$IPADDR" || -z "$NETMASK" ]]; then
-        log_error "Adapter name, IP address, and Subnet Mask are required for adapter #$i. Exiting."
+    if ! [[ "$NUM_ADAPTERS" =~ ^[0-9]+$ ]] || [ "$NUM_ADAPTERS" -eq 0 ]; then
+        log_error "Invalid number of adapters. Must be a positive integer. Exiting."
         exit 1
     fi
 
-    # Append adapter configuration to Netplan YAML
-    sudo bash -c "cat >> \"$NETPLAN_FILE\"" << EOF
+    NETPLAN_FILE="/etc/netplan/01-netcfg.yaml"
+    log_info "Creating Netplan configuration file: $NETPLAN_FILE"
+    echo "network:" | sudo tee $NETPLAN_FILE > /dev/null
+    echo "  version: 2" | sudo tee -a $NETPLAN_FILE > /dev/null
+    echo "  ethernets:" | sudo tee -a $NETPLAN_FILE > /dev/null
+
+    for (( i=1; i<=NUM_ADAPTERS; i++ ))
+    do
+        echo -e "\n${YELLOW}--- Configuring adapter #$i ---${RESET}"
+        read -p "  Adapter name (e.g., ens33): " ADAPTER
+        read -p "  Static IP Address (e.g., 192.168.1.10): " IPADDR
+        read -p "  Subnet Mask (e.g., 24): " NETMASK
+        read -p "  Default Gateway (optional, press Enter to skip): " GATEWAY
+        read -p "  DNS Servers (space separated, optional, press Enter to skip): " DNS
+        read -p "  Static Routes (e.g., 192.168.5.0/24:192.168.2.1): " ROUTES
+
+        sudo bash -c "cat >> '$NETPLAN_FILE'" << EOF
     $ADAPTER:
       dhcp4: no
       addresses: [$IPADDR/$NETMASK]
 EOF
+        if [[ -n "$GATEWAY" || -n "$ROUTES" ]]; then
+            echo "      routes:" | sudo tee -a "$NETPLAN_FILE" > /dev/null
+        fi
 
-    # Add routes if any
-    if [[ -n "$GATEWAY" || -n "$ROUTES" ]]; then
-        echo "      routes:" | sudo tee -a "$NETPLAN_FILE" > /dev/null
-    fi
+        if [[ -n "$GATEWAY" ]]; then
+            echo "        - to: default" | sudo tee -a "$NETPLAN_FILE"
+            echo "          via: $GATEWAY" | sudo tee -a "$NETPLAN_FILE"
+        fi
 
-    if [[ -n "$GATEWAY" ]]; then
-        echo "        - to: default" | sudo tee -a "$NETPLAN_FILE" > /dev/null
-        echo "          via: $GATEWAY" | sudo tee -a "$NETPLAN_FILE" > /dev/null
-    fi
+        if [[ -n "$ROUTES" ]]; then
+            IFS=',' read -ra ROUTE_ARRAY <<< "$ROUTES"
+            for route_entry in "${ROUTE_ARRAY[@]}"; do
+                DEST=$(echo "$route_entry" | cut -d':' -f1)
+                VIA=$(echo "$route_entry" | cut -d':' -f2)
+                echo "        - to: $DEST" | sudo tee -a "$NETPLAN_FILE"
+                echo "          via: $VIA" | sudo tee -a "$NETPLAN_FILE"
+            done
+        fi
 
-    if [[ -n "$ROUTES" ]]; then
-        IFS=',' read -ra ROUTE_ARRAY <<< "$ROUTES"
-        for route_entry in "${ROUTE_ARRAY[@]}"; do
-            DEST=$(echo "$route_entry" | cut -d':' -f1)
-            VIA=$(echo "$route_entry" | cut -d':' -f2)
-            if [[ -n "$DEST" && -n "$VIA" ]]; then
-                echo "        - to: $DEST" | sudo tee -a "$NETPLAN_FILE" > /dev/null
-                echo "          via: $VIA" | sudo tee -a "$NETPLAN_FILE" > /dev/null
-            fi
-        done
-    fi
+        if [[ -n "$DNS" ]]; then
+            echo "      nameservers:" | sudo tee -a "$NETPLAN_FILE"
+            echo "        addresses: [${DNS// /, }]" | sudo tee -a "$NETPLAN_FILE"
+        fi
 
-    # Add DNS if provided
-    if [[ -n "$DNS" ]]; then
-        echo "      nameservers:" | sudo tee -a "$NETPLAN_FILE" > /dev/null
-        echo "        addresses: [${DNS// /, }]" | sudo tee -a "$NETPLAN_FILE" > /dev/null
-    fi
+        log_success "Configuration added for adapter '$ADAPTER'."
+    done
 
-    log_success "Configuration added for adapter '$ADAPTER'."
+    log_info "Setting secure permissions for Netplan configuration file..."
+    sudo chmod 600 "$NETPLAN_FILE" && sudo chown root:root "$NETPLAN_FILE"
 
-    # Basic validation for IP and Netmask (can be more robust)
-    if [[ -z "$ADAPTER" || -z "$IPADDR" || -z "$NETMASK" ]]; then
-        log_error "Adapter name, IP address, and Subnet Mask are required for adapter #$i. Exiting."
+    echo -e "\n${CYAN}Applying network configuration...${RESET}"
+    if sudo netplan apply; then
+        log_success "Network configuration applied successfully."
+    else
+        log_error "Failed to apply network configuration. Check Netplan logs for errors."
         exit 1
     fi
-
-    # Append adapter configuration
-    sudo bash -c "cat >> \"$NETPLAN_FILE\"" << EOF
-    $ADAPTER:
-      dhcp4: no
-      addresses: [$IPADDR/$NETMASK]
-$( [ -n "$GATEWAY" ] && echo "      routes:" )
-$( [ -n "$GATEWAY" ] && echo "        - to: default" )
-$( [ -n "$GATEWAY" ] && echo "          via: $GATEWAY" )
-$( [ -n "$DNS" ] && echo "      nameservers:" )
-$( [ -n "$DNS" ] && echo "        addresses: [${DNS// /, }]" )
-EOF
-    log_success "Configuration added for adapter '$ADAPTER'."
-done
-
-# === Set Netplan file permissions securely ===
-log_info "Setting secure permissions for Netplan configuration file..."
-if sudo chmod 600 "$NETPLAN_FILE" && sudo chown root:root "$NETPLAN_FILE"; then
-    log_success "Permissions set for '$NETPLAN_FILE' (owner read/write only)."
-else
-    log_error "Failed to set secure permissions for Netplan file. Please check manually."
-    # Do not exit, as Netplan apply might still work, just with a warning.
 fi
 
-
-# === Apply Netplan Configuration ===
-echo -e "\n${CYAN}Applying network configuration...${RESET}"
-if sudo netplan apply; then
-    log_success "Network configuration applied successfully."
-else
-    log_error "Failed to apply network configuration. Check Netplan logs for errors."
-    exit 1
-fi
-
-# The internal source command for completeness, but won't affect the parent shell directly
-log_info "Attempting to apply custom prompt within script's context..."
-if source "/home/$USERNAME/.bashrc"; then
-    log_success "Custom prompt applied within the script's shell!"
-else
-    log_error "Failed to source ~/.bashrc within script. This is usually okay."
-fi
 # === Optional Router Setup ===
 read -p "Do you want to make this machine act as a router? (y/n): " IS_ROUTER
 if [[ "$IS_ROUTER" =~ ^[Yy]$ ]]; then
@@ -219,23 +170,16 @@ if [[ "$IS_ROUTER" =~ ^[Yy]$ ]]; then
     sudo sed -i 's/^#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
     sudo grep "^net.ipv4.ip_forward" /etc/sysctl.conf
 
-    # === Setup NAT using nftables ===
     log_info "Setting up NAT using nftables..."
     sudo nft flush ruleset
     sudo nft add table ip nat
     sudo nft add chain ip nat POSTROUTING '{ type nat hook postrouting priority 100; policy accept; }'
 
     read -p "Enter the outbound interface for NAT (e.g., ens33): " OUT_IFACE
-    if [[ -z "$OUT_IFACE" ]]; then
-        log_error "No interface entered. Cannot continue router setup."
-        exit 1
-    fi
     sudo nft add rule ip nat POSTROUTING oifname "$OUT_IFACE" counter masquerade
-    sudo nft list ruleset | sudo tee /etc/nftables.ruleset > /dev/null
-    cat /etc/nftables.ruleset
+    sudo nft list ruleset | sudo tee /etc/nftables.ruleset
 
-    # === Set up persistent dispatcher hook ===
-    log_info "Setting up persistence for nftables using dispatcher hook..."
+    log_info "Setting up persistence for nftables..."
     sudo mkdir -p /etc/networkd-dispatcher/routable.d
     sudo touch /etc/networkd-dispatcher/routable.d/50-ifup.hooks
     sudo chmod a+x /etc/networkd-dispatcher/routable.d/50-ifup.hooks
@@ -252,7 +196,6 @@ EOF
         log_info "Persistence skipped. NAT rules will not survive reboot."
     fi
 fi
-
 
 log_success "Setup complete!"
 echo -e "Hostname set to: ${YELLOW}$VM_NAME${RESET}"
