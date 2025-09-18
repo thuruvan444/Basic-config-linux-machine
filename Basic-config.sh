@@ -79,7 +79,7 @@ if [[ "$DO_PROMPT" =~ ^[Yy]$ ]]; then
     cat << EOF | sudo tee -a "$BASHRC_FILE"
 
 # Custom prompt
-PS1="${BLUE}${COURSE_NAME}-${MAGENTA}${VM_NAME}-${YELLOW}${USERNAME}${RESET} ${GREEN}\$(date +%a\\ %b\\ %d\\ -\\ %H:%M:%S)${RESET} \\$ "
+PS1="${BLUE}${COURSE_NAME}-${MAGENTA}${VM_NAME}-${YELLOW}${USERNAME}${RESET} ${GREEN}\D{%a %b %d - %H:%M:%S}${RESET} \$ "
 EOF
     log_success "Custom terminal prompt configured."
     CUSTOM_PROMPT_ENABLED=true
@@ -191,4 +191,4 @@ if [[ "$CUSTOM_PROMPT_ENABLED" == true ]]; then
     echo -e "${YELLOW}Or simply close and reopen your terminal.${RESET}"
 fi
 echo -e "All other system configurations (updates, tools, hostname, network) are already active."
-echo -e "${RED}This script has been created by Thuruvan Thavapalan with the help of AI :-)"
+echo -e "This script has been created by Thuruvan Thavapalan  :-)"
